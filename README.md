@@ -16,11 +16,11 @@ permission, which cannot have a scoped `Resource` declaration.  This
 violates least privilege and provides the instance with the ability to
 create (and overwrite) tags on any instance in the same AWS account.
 
-This project creates a CloudWatch Event rule that watches for AutoScaling
-events, specifically the successful launch of new EC2 instances, and names
-them based on their tags.  Thus, only the Lambda function that backs the
-CloudWatch Event rule has the abiility to name EC2 instances, and only in
-a specific format.
+This project creates an EventBridge rule (formerly CloudWatch Events) that
+watches for AutoScaling events, specifically the successful launch of new
+EC2 instances, and names them based on their tags.  Thus, only the Lambda
+function that backs the rule has the ability to name EC2 instances, and
+only in a specific format.
 
 ## Costs
 
@@ -54,29 +54,80 @@ is:
 donny-staging-029d0202d1a
 ```
 
-## Project Requirements
+## Requirements
 
-* Ansible (optional, but useful)
-* Amazon Web Services account
+* An Amazon Web Services account
+* The AWS CLI, configured with credentials
 * Permissions to create AWS resources:
 
-  Specifically: CloudFormation, CloudWatch Events, Lambda, IAM roles
+  Specifically: CloudFormation, EventBridge, Lambda, IAM roles
 
-## Launching the Stack
+## Deploying
 
-The stack must be launched in any region where auto-scaling groups are
-used and you want to name its members.  However, CloudWatch Event rules
-may not be available in every region, so the following Ansible playbook
-ensures that the stack is launched only in the regions where all AWS
-services are supported.
+Everything lives in a single CloudFormation template, so deploying is one
+command.  Run it in each region where you use auto-scaling groups and want
+its members named:
 
 ```
-$ ansible-playbook -i localhost.inventory -e 'stack_env=production' create-stack.yml
+$ aws cloudformation deploy \
+    --template-file cfn-template.yml \
+    --stack-name asg-name-instances \
+    --region us-east-1 \
+    --capabilities CAPABILITY_NAMED_IAM
 ```
+
+That is the whole story if you only use a handful of regions.  You can
+also upload `cfn-template.yml` directly in the CloudFormation console.
+
+### Deploying to many regions
+
+If you run auto-scaling groups in many regions, [Task](https://taskfile.dev)
+is included as an optional convenience runner.  It is not required to use
+this project.
+
+```
+$ task --list                       # show available tasks
+$ task deploy                       # one region (default: us-east-1)
+$ task deploy REGION=eu-west-1 ENVIRONMENT=production
+$ task deploy:all                   # every region in the REGIONS list
+```
+
+The region list, stack name, and environment label are all defined as
+variables at the top of `Taskfile.yml`.  Edit `REGIONS` down to the
+regions you actually use, or override any variable on the command line as
+shown above.
+
+## Removing
+
+```
+$ aws cloudformation delete-stack --stack-name asg-name-instances --region us-east-1
+```
+
+Or, with Task:
+
+```
+$ task delete                       # one region, waits for completion
+$ task delete:all                   # every region, does not wait
+```
+
+## Development
+
+The Lambda function is defined inline in `cfn-template.yml` so that the
+template stays self-contained and deployable in a single command with no
+packaging step or S3 staging bucket.
+
+To check the template before deploying:
+
+```
+$ task validate                     # aws cloudformation validate-template
+$ task lint                         # cfn-lint, if installed
+```
+
+`example-payloads/cloudwatch-event.json` contains a real AutoScaling launch
+event, which is useful for testing the handler.
 
 ## License
 
 tl;dr MIT license.
 
 Please read [LICENSE](LICENSE) to view the license for this project.
-

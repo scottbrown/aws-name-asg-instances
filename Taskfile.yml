@@ -1,0 +1,108 @@
+---
+# Optional convenience runner for deploying the CloudFormation stack.
+#
+# This file is NOT required to use this project.  The template is
+# self-contained and can be deployed with a single `aws cloudformation
+# deploy` command -- see the README.  Task is here purely to make
+# deploying to many regions at once less tedious.
+#
+# Install: https://taskfile.dev/installation/
+# Usage:   task --list
+
+version: '3'
+
+vars:
+  # Base name for the CloudFormation stack.  The environment is appended
+  # to it, producing e.g. "asg-name-instances-production".
+  PROJECT_NAME: asg-name-instances
+
+  # Label for the environment this stack is deployed into.
+  ENVIRONMENT: dev
+
+  # How long this stack is expected to live.  Applied as a stack tag so
+  # that ephemeral stacks can be told apart from permanent ones.
+  LIFETIME: long
+
+  TEMPLATE: cfn-template.yml
+
+  # The template creates an IAM role and two inline policies, so
+  # CloudFormation requires an explicit IAM acknowledgement.
+  CAPABILITIES: CAPABILITY_NAMED_IAM
+
+  # Region used by the single-region tasks (deploy, delete, validate).
+  REGION: us-east-1
+
+  # Regions used by the fan-out tasks (deploy:all, delete:all).  Trim
+  # this to the regions where you actually run auto-scaling groups.
+  REGIONS:
+    - us-east-1
+    - us-east-2
+    - us-west-1
+    - us-west-2
+    - ca-central-1
+    - sa-east-1
+    - eu-west-1
+    - eu-west-2
+    - eu-west-3
+    - eu-central-1
+    - ap-northeast-1
+    - ap-northeast-2
+    - ap-southeast-1
+    - ap-southeast-2
+    - ap-south-1
+
+  STACK_NAME: '{{.PROJECT_NAME}}-{{.ENVIRONMENT}}'
+
+tasks:
+  default:
+    desc: List the available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  deploy:
+    desc: Deploy the stack to a single region (REGION=us-east-1)
+    cmds:
+      - >-
+        aws cloudformation deploy
+        --template-file {{.TEMPLATE}}
+        --stack-name {{.STACK_NAME}}
+        --region {{.REGION}}
+        --capabilities {{.CAPABILITIES}}
+        --no-fail-on-empty-changeset
+        --tags
+        project={{.PROJECT_NAME}}
+        environment={{.ENVIRONMENT}}
+        lifetime={{.LIFETIME}}
+
+  deploy:all:
+    desc: Deploy the stack to every region in REGIONS
+    cmds:
+      - for: { var: REGIONS }
+        task: deploy
+        vars:
+          REGION: '{{.ITEM}}'
+
+  delete:
+    desc: Delete the stack from a single region and wait for it to finish
+    cmds:
+      - aws cloudformation delete-stack --stack-name {{.STACK_NAME}} --region {{.REGION}}
+      - aws cloudformation wait stack-delete-complete --stack-name {{.STACK_NAME}} --region {{.REGION}}
+
+  delete:all:
+    desc: Delete the stack from every region in REGIONS (does not wait)
+    cmds:
+      - for: { var: REGIONS }
+        cmd: aws cloudformation delete-stack --stack-name {{.STACK_NAME}} --region {{.ITEM}}
+      - cmd: echo "Deletion requested in all regions. Deletes run asynchronously."
+        silent: true
+
+  validate:
+    desc: Ask CloudFormation to validate the template
+    cmds:
+      - aws cloudformation validate-template --template-body file://{{.TEMPLATE}} --region {{.REGION}}
+
+  lint:
+    desc: Lint the template with cfn-lint (pip install cfn-lint)
+    cmds:
+      - cfn-lint {{.TEMPLATE}}

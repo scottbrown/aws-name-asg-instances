@@ -27,7 +27,7 @@ Resources:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
-        ZipFile: !Sub |
+        ZipFile: |
           import boto3
           ec2 = boto3.client('ec2')
 

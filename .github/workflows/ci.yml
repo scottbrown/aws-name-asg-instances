@@ -1,0 +1,40 @@
+---
+name: CI
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  # The template can break without anyone touching it: AWS deprecates Lambda
+  # runtimes on its own schedule, and cfn-lint learns about those
+  # deprecations in new releases.  A weekly run surfaces that while it is
+  # still a warning rather than a failed deploy.
+  schedule:
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Deliberately unpinned.  New cfn-lint releases are how deprecated
+      # Lambda runtimes and other drift get reported, so tracking the
+      # latest is the point rather than a risk to be pinned away.
+      - name: Install tools
+        run: pip install cfn-lint pyyaml
+
+      - name: Lint CloudFormation template
+        run: cfn-lint cfn-template.yml
+
+      # cfn-lint does not look inside the inline ZipFile block, so a syntax
+      # error in the handler passes its checks and only fails at deploy
+      # time.  This catches that.
+      - name: Check inline Lambda handler
+        run: python3 scripts/check-handler.py cfn-template.yml

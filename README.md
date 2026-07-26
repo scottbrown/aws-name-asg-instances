@@ -22,6 +22,27 @@ EC2 instances, and names them based on their tags.  Thus, only the Lambda
 function that backs the rule has the ability to name EC2 instances, and
 only in a specific format.
 
+## How It Works
+
+```mermaid
+flowchart LR
+    ASG["Auto Scaling Group"]
+    RULE["EventBridge rule"]
+    FN["Lambda function"]
+    EC2["EC2 instance"]
+
+    ASG -->|"EC2 Instance Launch Successful"| RULE
+    RULE -->|invokes| FN
+    FN -->|"DescribeTags: read project + environment"| EC2
+    FN -->|"CreateTags: write Name"| EC2
+```
+
+A new instance starts with no `Name` tag.  When the auto-scaling group
+finishes launching it, the rule matches the resulting event, the Lambda
+function reads the instance's existing tags, and writes back a `Name` built
+from them.  If the instance already has a non-empty `Name`, it is left
+alone.
+
 ## Costs
 
 The resources created under this CloudFormation template will cost either

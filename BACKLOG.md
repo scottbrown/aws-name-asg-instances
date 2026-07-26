@@ -6,17 +6,7 @@ this file deleted.
 
 ---
 
-## 1. Lambda runtime `python3.6` is no longer accepted by AWS
-
-**Priority: blocker.**  `cfn-template.yml` sets `Runtime: "python3.6"`.  AWS
-no longer permits creating functions on that runtime, so a fresh deploy of
-this stack fails outright.
-
-Bump to a current runtime (`python3.12`).  The handler code should run
-unchanged, but it is worth confirming that `boto3` calls behave the same on
-the newer bundled SDK.
-
-## 2. Make the tag keys and name format configurable
+## 1. Make the tag keys and name format configurable
 
 The tag keys `project` and `environment`, and the resulting
 `<project>-<environment>-<instance_id>` format, are hardcoded in the Lambda
@@ -27,7 +17,7 @@ Expose them as CloudFormation `Parameters` (e.g. `ProjectTagKey`,
 `EnvironmentTagKey`, `NameFormat`) with the present values as defaults, and
 pass them into the function via environment variables.
 
-## 3. Add unit tests for the Lambda handler
+## 2. Add unit tests for the Lambda handler
 
 The handler has no tests.  It should not be extracted to a separate source
 file, because the inline `ZipFile` definition is what keeps the template
@@ -40,11 +30,15 @@ namespace with `boto3` mocked.  That keeps one source of truth and still
 gets real coverage.  `example-payloads/cloudwatch-event.json` is ready-made
 fixture data.
 
+This approach has been confirmed to work -- it was used as a throwaway
+smoke test when the runtime was bumped to `python3.12`.  What remains is to
+commit it as a proper test suite with a runner.
+
 Cases worth covering: missing `project`/`environment` tags, a `Name` tag
 that is already set, instance-not-found, and the 255-character truncation
 in `build_name`.
 
-## 4. Refresh the region list
+## 3. Refresh the region list
 
 The `REGIONS` list in `Taskfile.yml` (carried over from the old Ansible
 vars) predates a number of current regions -- `eu-north-1`, `eu-south-1`,
@@ -55,16 +49,16 @@ Events was not available everywhere.  That constraint no longer holds:
 EventBridge is in every commercial region.  Either refresh the list or
 document it plainly as a user-editable filter.
 
-## 5. Add CI
+## 4. Add CI
 
 There is no CI.  A GitHub Actions workflow running `cfn-lint` on the
-template -- plus the tests from item 3 once they exist -- would have caught
-both the dead Python runtime and the Ansible breakage that motivated
-removing Ansible.
+template -- plus the tests from item 2 once they exist -- would have caught
+both the dead Python runtime and the Ansible breakage, each of which sat
+unnoticed in the repository until they were found by inspection.
 
 A `.gitignore` is also missing.
 
-## 6. Add an architecture diagram to the README
+## 5. Add an architecture diagram to the README
 
 A small diagram of the flow (ASG launch event -> EventBridge rule -> Lambda
 -> `ec2:CreateTags`) would let a reader understand the project in a few
@@ -73,7 +67,7 @@ seconds.
 The README typo and the stale CloudWatch Events naming were fixed when
 Ansible was removed; the diagram is what remains.
 
-## 7. Tighten the Lambda's `ec2:CreateTags` permission
+## 6. Tighten the Lambda's `ec2:CreateTags` permission
 
 `AllowEC2NamingPolicy` grants `ec2:CreateTags` on `Resource: "*"`.  This is
 defensible -- concentrating the permission in one audited function instead
@@ -84,7 +78,7 @@ creation to the `Name` key, e.g. `aws:RequestTag` / `aws:TagKeys`.
 Worth verifying against the EC2 condition keys that `CreateTags` actually
 supports before committing to a policy shape.
 
-## 8. Rename the project to `christen`
+## 7. Rename the project to `christen`
 
 `aws-name-asg-instances` is a mouthful.  Rename to `christen` -- it names
 newborn instances, it is short, and it works as a stack name.

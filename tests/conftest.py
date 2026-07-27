@@ -14,11 +14,12 @@ import types
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from check_handler import extract_handler  # noqa: E402
+from check_handler import CloudFormationLoader, extract_handler  # noqa: E402
 
 TEMPLATE = REPO_ROOT / "cfn-template.yml"
 PAYLOAD = REPO_ROOT / "example-payloads" / "cloudwatch-event.json"
@@ -36,6 +37,16 @@ DEFAULT_TAGS = [
 def handler_source():
     """The Lambda source, read out of the CloudFormation template."""
     return extract_handler(TEMPLATE)
+
+
+@pytest.fixture(scope="session")
+def template():
+    """The parsed CloudFormation template.
+
+    Intrinsics are flattened by the loader, so a `!Ref Foo` reads back as
+    the string "Foo" -- enough to assert what a property points at.
+    """
+    return yaml.load(TEMPLATE.read_text(), Loader=CloudFormationLoader)
 
 
 @pytest.fixture
@@ -57,10 +68,16 @@ def load_handler(handler_source, monkeypatch):
     The factory returns a (module, ec2) pair.  `ec2` is the mock the
     handler will call, pre-loaded with responses describing a single
     existing instance carrying `tags`, so individual tests only need to
-    override the part they care about.
+    override the part they care about.  `env` sets the environment
+    variables the stack normally supplies from its parameters.
     """
 
-    def _load(tags=None):
+    def _load(tags=None, env=None):
+        # The handler reads its configuration from the environment at import
+        # time, so this has to be set before the source is executed.
+        for key, value in (env or {}).items():
+            monkeypatch.setenv(key, value)
+
         ec2 = MagicMock()
         ec2.describe_instance_status.return_value = {
             "InstanceStatuses": [{"InstanceId": INSTANCE_ID}]

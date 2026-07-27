@@ -25,6 +25,13 @@ vars:
 
   TEMPLATE: cfn-template.yml
 
+  # Stack parameters.  These match the template's own defaults; override
+  # them to suit a different tagging standard, e.g.
+  #   task deploy PROJECT_TAG_KEY=service ENVIRONMENT_TAG_KEY=stage
+  PROJECT_TAG_KEY: project
+  ENVIRONMENT_TAG_KEY: environment
+  NAME_FORMAT: '{project}-{environment}-{instance_id}'
+
   # The template creates an IAM role and two inline policies, so
   # CloudFormation requires an explicit IAM acknowledgement.
   CAPABILITIES: CAPABILITY_NAMED_IAM
@@ -70,6 +77,10 @@ tasks:
         --region {{.REGION}}
         --capabilities {{.CAPABILITIES}}
         --no-fail-on-empty-changeset
+        --parameter-overrides
+        ProjectTagKey={{.PROJECT_TAG_KEY}}
+        EnvironmentTagKey={{.ENVIRONMENT_TAG_KEY}}
+        NameFormat='{{.NAME_FORMAT}}'
         --tags
         project={{.PROJECT_NAME}}
         environment={{.ENVIRONMENT}}

@@ -126,6 +126,106 @@ class TestRefusesToTag:
         assert tag_written(ec2) is None
 
 
+class TestConfiguration:
+    """The tag keys and name format come from the stack's parameters, which
+    reach the handler as environment variables."""
+
+    def test_it_reads_tags_under_configured_keys(self, load_handler, event):
+        module, ec2 = load_handler(
+            tags=[
+                {"Key": "service", "Value": "billing"},
+                {"Key": "stage", "Value": "prod"},
+            ],
+            env={"PROJECT_TAG_KEY": "service", "ENVIRONMENT_TAG_KEY": "stage"},
+        )
+
+        module.lambda_handler(event, None)
+
+        assert tag_written(ec2) == "billing-prod-0123456789abcdef0"
+
+    def test_the_default_keys_no_longer_apply_once_overridden(
+        self, load_handler, event
+    ):
+        module, ec2 = load_handler(
+            tags=[
+                {"Key": "project", "Value": "donny"},
+                {"Key": "environment", "Value": "staging"},
+            ],
+            env={"PROJECT_TAG_KEY": "service", "ENVIRONMENT_TAG_KEY": "stage"},
+        )
+
+        module.lambda_handler(event, None)
+
+        assert tag_written(ec2) is None
+
+    def test_it_honours_a_custom_name_format(self, load_handler, event):
+        module, ec2 = load_handler(
+            env={"NAME_FORMAT": "{environment}.{project}.{instance_id}"}
+        )
+
+        module.lambda_handler(event, None)
+
+        assert tag_written(ec2) == "staging.donny.0123456789abcdef0"
+
+    def test_a_format_may_drop_placeholders(self, load_handler, event):
+        module, ec2 = load_handler(env={"NAME_FORMAT": "{project}-{instance_id}"})
+
+        module.lambda_handler(event, None)
+
+        assert tag_written(ec2) == "donny-0123456789abcdef0"
+
+    def test_a_custom_format_is_still_truncated(self, load_handler, event):
+        module, _ = load_handler(env={"NAME_FORMAT": "{project}" * 100})
+
+        assert len(module.build_name("p" * 10, "e", "i-abc")) == 255
+
+    def test_an_unknown_placeholder_refuses_rather_than_crashing(
+        self, load_handler, event
+    ):
+        module, ec2 = load_handler(env={"NAME_FORMAT": "{project}-{team}"})
+
+        module.lambda_handler(event, None)  # must not raise
+
+        assert tag_written(ec2) is None
+
+    def test_a_positional_placeholder_refuses_rather_than_crashing(
+        self, load_handler, event
+    ):
+        module, ec2 = load_handler(env={"NAME_FORMAT": "{project}-{}"})
+
+        module.lambda_handler(event, None)  # must not raise
+
+        assert tag_written(ec2) is None
+
+
+class TestTemplateWiring:
+    """Guards against the template and the handler drifting apart.  The
+    handler carries its own fallback defaults so it stays runnable in
+    isolation, which means a parameter default could change without the
+    tests noticing unless something checks the two agree."""
+
+    def test_parameter_defaults_match_the_handler_fallbacks(
+        self, load_handler, template
+    ):
+        module, _ = load_handler()
+        parameters = template["Parameters"]
+
+        assert parameters["ProjectTagKey"]["Default"] == module.PROJECT_TAG_KEY
+        assert parameters["EnvironmentTagKey"]["Default"] == module.ENVIRONMENT_TAG_KEY
+        assert parameters["NameFormat"]["Default"] == module.NAME_FORMAT
+
+    def test_each_parameter_reaches_the_function(self, template):
+        variables = template["Resources"]["LambdaFunction"]["Properties"][
+            "Environment"
+        ]["Variables"]
+
+        assert variables == {
+            "PROJECT_TAG_KEY": "ProjectTagKey",
+            "ENVIRONMENT_TAG_KEY": "EnvironmentTagKey",
+            "NAME_FORMAT": "NameFormat",
+        }
+
+
 class TestFailureIsContained:
     def test_a_rejected_instance_does_not_raise(self, load_handler, event):
         """EventBridge retries on an unhandled exception, so the handler must

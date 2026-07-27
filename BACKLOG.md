@@ -6,18 +6,7 @@ this file deleted.
 
 ---
 
-## 1. Make the tag keys and name format configurable
-
-The tag keys `project` and `environment`, and the resulting
-`<project>-<environment>-<instance_id>` format, are hardcoded in the Lambda
-source.  Adopting this project with a different tagging standard currently
-means editing the template.
-
-Expose them as CloudFormation `Parameters` (e.g. `ProjectTagKey`,
-`EnvironmentTagKey`, `NameFormat`) with the present values as defaults, and
-pass them into the function via environment variables.
-
-## 2. Refresh the region list
+## 1. Refresh the region list
 
 The `REGIONS` list in `Taskfile.yml` (carried over from the old Ansible
 vars) predates a number of current regions -- `eu-north-1`, `eu-south-1`,
@@ -28,7 +17,7 @@ Events was not available everywhere.  That constraint no longer holds:
 EventBridge is in every commercial region.  Either refresh the list or
 document it plainly as a user-editable filter.
 
-## 3. Tighten the Lambda's `ec2:CreateTags` permission
+## 2. Tighten the Lambda's `ec2:CreateTags` permission
 
 `AllowEC2NamingPolicy` grants `ec2:CreateTags` on `Resource: "*"`.  This is
 defensible -- concentrating the permission in one audited function instead
@@ -39,7 +28,7 @@ creation to the `Name` key, e.g. `aws:RequestTag` / `aws:TagKeys`.
 Worth verifying against the EC2 condition keys that `CreateTags` actually
 supports before committing to a policy shape.
 
-## 4. Rename the project to `christen`
+## 3. Rename the project to `christen`
 
 `aws-name-asg-instances` is a mouthful.  Rename to `christen` -- it names
 newborn instances, it is short, and it works as a stack name.

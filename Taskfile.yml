@@ -106,4 +106,15 @@ tasks:
     desc: Lint the template and syntax-check the inline Lambda handler
     cmds:
       - cfn-lint {{.TEMPLATE}}
-      - python3 scripts/check-handler.py {{.TEMPLATE}}
+      - python3 scripts/check_handler.py {{.TEMPLATE}}
+
+  test:
+    desc: Run the handler tests (pip install pytest pyyaml)
+    cmds:
+      - pytest tests/ {{.CLI_ARGS}}
+
+  check:
+    desc: Run everything CI runs
+    cmds:
+      - task: lint
+      - task: test

@@ -37,4 +37,22 @@ jobs:
       # error in the handler passes its checks and only fails at deploy
       # time.  This catches that.
       - name: Check inline Lambda handler
-        run: python3 scripts/check-handler.py cfn-template.yml
+        run: python3 scripts/check_handler.py cfn-template.yml
+
+  test:
+    name: Test handler
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: pip install pytest pyyaml
+
+      # The tests read the handler back out of the template and run it with
+      # boto3 mocked, so the template stays the single source of truth.
+      - name: Run tests
+        run: pytest tests/ -v

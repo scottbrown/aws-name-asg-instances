@@ -2,6 +2,30 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Adds Name tags to EC2 instances in an ASG"
 
+Parameters:
+  ProjectTagKey:
+    Type: String
+    Default: "project"
+    Description: >-
+      The tag key read from the instance to supply the {project} placeholder.
+      Change this if your tagging standard uses a different key, such as
+      'service' or 'app'.
+  EnvironmentTagKey:
+    Type: String
+    Default: "environment"
+    Description: >-
+      The tag key read from the instance to supply the {environment}
+      placeholder, such as 'env' or 'stage'.
+  NameFormat:
+    Type: String
+    Default: "{project}-{environment}-{instance_id}"
+    Description: >-
+      The format of the generated Name tag. The available placeholders are
+      {project}, {environment} and {instance_id}, and they are roles rather
+      than tag names: {project} is the value of whichever tag ProjectTagKey
+      names. The instance ID has its 'i-' prefix stripped. The result is
+      truncated to 255 characters, the AWS limit for a tag value.
+
 Resources:
   CloudWatchEventRule:
     Type: "AWS::Events::Rule"
@@ -28,8 +52,15 @@ Resources:
     Properties:
       Code:
         ZipFile: |
+          import os
           import boto3
           ec2 = boto3.client('ec2')
+
+          # Supplied by the stack's parameters.  The fallbacks keep the
+          # handler runnable on its own, and match the parameter defaults.
+          PROJECT_TAG_KEY = os.environ.get('PROJECT_TAG_KEY', 'project')
+          ENVIRONMENT_TAG_KEY = os.environ.get('ENVIRONMENT_TAG_KEY', 'environment')
+          NAME_FORMAT = os.environ.get('NAME_FORMAT', '{project}-{environment}-{instance_id}')
 
           class LambdaException(Exception):
             pass
@@ -64,7 +95,12 @@ Resources:
 
           def build_name(project, env, instance_id):
             id = instance_id.split('-')[1]  # strip the i-
-            name = "-".join([project, env, id])
+            try:
+              name = NAME_FORMAT.format(project=project, environment=env, instance_id=id)
+            except (KeyError, IndexError) as e:
+              raise LambdaException(
+                "NAME_FORMAT {} uses an unknown placeholder {}.  Valid placeholders are "
+                "project, environment and instance_id".format(NAME_FORMAT, e))
             return name[:255]   # tag values max out at 255 chars
 
           def name_instance(instance_id, name):
@@ -88,14 +124,19 @@ Resources:
 
               assert_name_tag_not_set(instance_id, tag_list)
 
-              project_tag = get_tag_value(tag_list, 'project')
-              env_tag = get_tag_value(tag_list, 'environment')
+              project_tag = get_tag_value(tag_list, PROJECT_TAG_KEY)
+              env_tag = get_tag_value(tag_list, ENVIRONMENT_TAG_KEY)
 
               name = build_name(project_tag, env_tag, instance_id)
               name_instance(instance_id, name)
             except LambdaException as e:
               print("ERROR: {}".format(e.args[0]))
       Description: "Names EC2 instances in an ASG based on its tags"
+      Environment:
+        Variables:
+          PROJECT_TAG_KEY: !Ref ProjectTagKey
+          ENVIRONMENT_TAG_KEY: !Ref EnvironmentTagKey
+          NAME_FORMAT: !Ref NameFormat
       Handler: "index.lambda_handler"
       Role: !GetAtt IAMRole.Arn
       MemorySize: 128   # MB

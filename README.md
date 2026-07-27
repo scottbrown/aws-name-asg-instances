@@ -62,6 +62,31 @@ The tags `project` and `environment` must be available on the instance and
 given a non-empty string value.  The `instance_id` is already known by the
 auto-scaling group during launch, so you do not need to provide it.
 
+Both the tag keys and the format are stack parameters, so you can match a
+different tagging standard without editing the template:
+
+| Parameter | Default | Purpose |
+| --- | --- | --- |
+| `ProjectTagKey` | `project` | Tag key supplying `{project}` |
+| `EnvironmentTagKey` | `environment` | Tag key supplying `{environment}` |
+| `NameFormat` | `{project}-{environment}-{instance_id}` | Shape of the generated name |
+
+The placeholders are roles rather than tag names: `{project}` is the value
+of whichever tag `ProjectTagKey` names.  So a team tagging with `service`
+and `stage` would deploy with:
+
+```
+$ aws cloudformation deploy \
+    --template-file cfn-template.yml \
+    --stack-name asg-name-instances \
+    --region us-east-1 \
+    --capabilities CAPABILITY_NAMED_IAM \
+    --parameter-overrides ProjectTagKey=service EnvironmentTagKey=stage
+```
+
+A format naming a placeholder that does not exist is refused and logged,
+leaving the instance unnamed rather than failing the function.
+
 The `instance_id` is stripped of its `i-` prefix, leaving only the unique
 ID.
 

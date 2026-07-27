@@ -13,7 +13,7 @@ This script closes that gap.  It is also the extraction mechanism a real
 test suite should build on: parse the template, pull the source out, and
 exercise it with boto3 mocked.
 
-Usage: python3 scripts/check-handler.py [template.yml]
+Usage: python3 scripts/check_handler.py [template.yml]
 """
 
 import pathlib

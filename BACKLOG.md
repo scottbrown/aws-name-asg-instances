@@ -31,8 +31,10 @@ gets real coverage.  `example-payloads/cloudwatch-event.json` is ready-made
 fixture data.
 
 This approach has been confirmed to work -- it was used as a throwaway
-smoke test when the runtime was bumped to `python3.12`.  What remains is to
-commit it as a proper test suite with a runner.
+smoke test when the runtime was bumped to `python3.12`, and
+`scripts/check-handler.py` already does the extraction half of it.  What
+remains is to commit it as a proper test suite with a runner, and add a
+job to `.github/workflows/ci.yml` that runs it.
 
 Cases worth covering: missing `project`/`environment` tags, a `Name` tag
 that is already set, instance-not-found, and the 255-character truncation
@@ -49,25 +51,7 @@ Events was not available everywhere.  That constraint no longer holds:
 EventBridge is in every commercial region.  Either refresh the list or
 document it plainly as a user-editable filter.
 
-## 4. Add CI
-
-There is no CI.  A GitHub Actions workflow running `cfn-lint` on the
-template -- plus the tests from item 2 once they exist -- would have caught
-both the dead Python runtime and the Ansible breakage, each of which sat
-unnoticed in the repository until they were found by inspection.
-
-A `.gitignore` is also missing.
-
-## 5. Add an architecture diagram to the README
-
-A small diagram of the flow (ASG launch event -> EventBridge rule -> Lambda
--> `ec2:CreateTags`) would let a reader understand the project in a few
-seconds.
-
-The README typo and the stale CloudWatch Events naming were fixed when
-Ansible was removed; the diagram is what remains.
-
-## 6. Tighten the Lambda's `ec2:CreateTags` permission
+## 4. Tighten the Lambda's `ec2:CreateTags` permission
 
 `AllowEC2NamingPolicy` grants `ec2:CreateTags` on `Resource: "*"`.  This is
 defensible -- concentrating the permission in one audited function instead
@@ -78,13 +62,20 @@ creation to the `Name` key, e.g. `aws:RequestTag` / `aws:TagKeys`.
 Worth verifying against the EC2 condition keys that `CreateTags` actually
 supports before committing to a policy shape.
 
-## 7. Rename the project to `christen`
+## 5. Rename the project to `christen`
 
 `aws-name-asg-instances` is a mouthful.  Rename to `christen` -- it names
 newborn instances, it is short, and it works as a stack name.
 
-Touches: the repository name, the README title, `PROJECT_NAME` in
-`Taskfile.yml` (which feeds the default stack name), and possibly
-`cfn-template.yml` -> `christen.yml`.  Note that renaming `PROJECT_NAME`
-changes the default stack name, so existing deployments would need either
-the old value passed explicitly or a deliberate stack replacement.
+Touches: the repository name, the README title, and `PROJECT_NAME` in
+`Taskfile.yml` (which feeds the default stack name).
+
+Renaming `cfn-template.yml` to `christen.yml` is optional but consistent.
+If it is done, the filename is referenced in four places: the `TEMPLATE`
+variable in `Taskfile.yml`, two steps in `.github/workflows/ci.yml`, the
+default in `scripts/check-handler.py`, and the deploy examples in the
+README.
+
+Note that renaming `PROJECT_NAME` changes the default stack name, so
+existing deployments would need either the old value passed explicitly or
+a deliberate stack replacement.

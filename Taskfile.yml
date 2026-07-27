@@ -103,6 +103,7 @@ tasks:
       - aws cloudformation validate-template --template-body file://{{.TEMPLATE}} --region {{.REGION}}
 
   lint:
-    desc: Lint the template with cfn-lint (pip install cfn-lint)
+    desc: Lint the template and syntax-check the inline Lambda handler
     cmds:
       - cfn-lint {{.TEMPLATE}}
+      - python3 scripts/check-handler.py {{.TEMPLATE}}

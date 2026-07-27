@@ -39,24 +39,17 @@ vars:
   # Region used by the single-region tasks (deploy, delete, validate).
   REGION: us-east-1
 
-  # Regions used by the fan-out tasks (deploy:all, delete:all).  Trim
-  # this to the regions where you actually run auto-scaling groups.
-  REGIONS:
-    - us-east-1
-    - us-east-2
-    - us-west-1
-    - us-west-2
-    - ca-central-1
-    - sa-east-1
-    - eu-west-1
-    - eu-west-2
-    - eu-west-3
-    - eu-central-1
-    - ap-northeast-1
-    - ap-northeast-2
-    - ap-southeast-1
-    - ap-southeast-2
-    - ap-south-1
+  # Regions used by the fan-out tasks (deploy:all, delete:all).
+  #
+  # Left empty, they ask the account which regions it has enabled.  That
+  # is deliberate: a hardcoded list goes stale every time AWS opens a
+  # region, and listing every region is worse, because opt-in regions are
+  # disabled by default and deploying to one fails.  Asking the account
+  # gets both right for free.
+  #
+  # Pin an explicit list to deploy somewhere narrower:
+  #   task deploy:all REGIONS="us-east-1 eu-west-1"
+  REGIONS: ""
 
   STACK_NAME: '{{.PROJECT_NAME}}-{{.ENVIRONMENT}}'
 
@@ -87,9 +80,16 @@ tasks:
         lifetime={{.LIFETIME}}
 
   deploy:all:
-    desc: Deploy the stack to every region in REGIONS
+    desc: Deploy the stack to every enabled region (or those in REGIONS)
+    vars:
+      TARGET_REGIONS:
+        sh: >-
+          {{if .REGIONS}}echo "{{.REGIONS}}"{{else}}aws ec2 describe-regions
+          --region {{.REGION}}
+          --filters "Name=opt-in-status,Values=opt-in-not-required,opted-in"
+          --query "Regions[].RegionName" --output text{{end}}
     cmds:
-      - for: { var: REGIONS }
+      - for: { var: TARGET_REGIONS }
         task: deploy
         vars:
           REGION: '{{.ITEM}}'
@@ -101,9 +101,16 @@ tasks:
       - aws cloudformation wait stack-delete-complete --stack-name {{.STACK_NAME}} --region {{.REGION}}
 
   delete:all:
-    desc: Delete the stack from every region in REGIONS (does not wait)
+    desc: Delete the stack from every enabled region (does not wait)
+    vars:
+      TARGET_REGIONS:
+        sh: >-
+          {{if .REGIONS}}echo "{{.REGIONS}}"{{else}}aws ec2 describe-regions
+          --region {{.REGION}}
+          --filters "Name=opt-in-status,Values=opt-in-not-required,opted-in"
+          --query "Regions[].RegionName" --output text{{end}}
     cmds:
-      - for: { var: REGIONS }
+      - for: { var: TARGET_REGIONS }
         cmd: aws cloudformation delete-stack --stack-name {{.STACK_NAME}} --region {{.ITEM}}
       - cmd: echo "Deletion requested in all regions. Deletes run asynchronously."
         silent: true

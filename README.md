@@ -135,13 +135,24 @@ this project.
 $ task --list                       # show available tasks
 $ task deploy                       # one region (default: us-east-1)
 $ task deploy REGION=eu-west-1 ENVIRONMENT=production
-$ task deploy:all                   # every region in the REGIONS list
+$ task deploy:all                   # every region your account has enabled
 ```
 
-The region list, stack name, and environment label are all defined as
-variables at the top of `Taskfile.yml`.  Edit `REGIONS` down to the
-regions you actually use, or override any variable on the command line as
-shown above.
+`task deploy:all` asks your account which regions it has enabled, rather
+than carrying a hardcoded list.  That avoids two problems: a list baked
+into the repository goes stale every time AWS opens a region, and simply
+listing every region does not work either, because opt-in regions are
+disabled by default and deploying to one fails.
+
+To deploy somewhere narrower, pin the list:
+
+```
+$ task deploy:all REGIONS="us-east-1 eu-west-1"
+```
+
+The stack name, environment label, and parameters are all variables at the
+top of `Taskfile.yml`, and any of them can be overridden on the command
+line as shown above.
 
 ## Removing
 

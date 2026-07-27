@@ -226,6 +226,52 @@ class TestTemplateWiring:
         }
 
 
+class TestNamingPolicy:
+    """The whole point of the project is that nothing else gets broad
+    ec2:CreateTags. That argument only holds if the function's own grant is
+    narrow, so the policy shape is worth pinning."""
+
+    @staticmethod
+    def statements(template):
+        return template["Resources"]["AllowEC2NamingPolicy"]["Properties"][
+            "PolicyDocument"
+        ]["Statement"]
+
+    @staticmethod
+    def actions(statement):
+        action = statement["Action"]
+        return [action] if isinstance(action, str) else action
+
+    def write_statement(self, template):
+        matching = [
+            s for s in self.statements(template) if "ec2:CreateTags" in self.actions(s)
+        ]
+        assert len(matching) == 1, "expected exactly one statement granting CreateTags"
+        return matching[0]
+
+    def test_tag_writing_is_confined_to_the_name_key(self, template):
+        condition = self.write_statement(template)["Condition"]
+
+        assert condition["ForAllValues:StringEquals"]["aws:TagKeys"] == ["Name"]
+
+    def test_tag_writing_is_confined_to_instances(self, template):
+        resource = self.write_statement(template)["Resource"]
+
+        assert resource != "*"
+        assert resource.endswith(":instance/*")
+
+    def test_tag_writing_is_confined_to_this_account(self, template):
+        assert "${AWS::AccountId}" in self.write_statement(template)["Resource"]
+
+    def test_the_broad_statement_grants_only_reads(self, template):
+        for statement in self.statements(template):
+            if statement.get("Resource") == "*":
+                assert all(
+                    action.startswith("ec2:Describe")
+                    for action in self.actions(statement)
+                ), "a wildcard-resource statement grants something other than reads"
+
+
 class TestFailureIsContained:
     def test_a_rejected_instance_does_not_raise(self, load_handler, event):
         """EventBridge retries on an unhandled exception, so the handler must

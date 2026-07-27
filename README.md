@@ -22,6 +22,11 @@ EC2 instances, and names them based on their tags.  Thus, only the Lambda
 function that backs the rule has the ability to name EC2 instances, and
 only in a specific format.
 
+That function's own permission is itself scoped: it may write only the
+`Name` tag, and only to instances in its own account.  It cannot touch any
+other tag, so concentrating the permission here does not simply move the
+over-permission from the instances to the function.
+
 ## How It Works
 
 ```mermaid

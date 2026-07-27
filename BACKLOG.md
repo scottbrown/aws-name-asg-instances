@@ -6,18 +6,7 @@ this file deleted.
 
 ---
 
-## 1. Tighten the Lambda's `ec2:CreateTags` permission
-
-`AllowEC2NamingPolicy` grants `ec2:CreateTags` on `Resource: "*"`.  This is
-defensible -- concentrating the permission in one audited function instead
-of granting it to every instance profile is the entire point of the project
--- but it can be tightened further with a condition restricting tag
-creation to the `Name` key, e.g. `aws:RequestTag` / `aws:TagKeys`.
-
-Worth verifying against the EC2 condition keys that `CreateTags` actually
-supports before committing to a policy shape.
-
-## 2. Rename the project to `christen`
+## 1. Rename the project to `christen`
 
 `aws-name-asg-instances` is a mouthful.  Rename to `christen` -- it names
 newborn instances, it is short, and it works as a stack name.
